@@ -1,5 +1,5 @@
 {
-  "name": "backend",
+  "name": "foodflow-backend",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -9,12 +9,14 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "FoodFlow Admin Backend API",
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
     "express": "^5.1.0",
-    "pg": "^8.16.3"
+    "mysql2": "^3.11.4",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
