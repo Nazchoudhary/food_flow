@@ -3,6 +3,7 @@ const cors = require('cors');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -11,6 +12,9 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from frontend build
+app.use(express.static(path.join(__dirname, '../dist')));
 
 // Database connection
 const dbConfig = {
@@ -55,7 +59,105 @@ const authenticateToken = (req, res, next) => {
 };
 
 // =============================================================================
-// DASHBOARD ROUTES
+// PAGE ROUTES (Server-side routing)
+// =============================================================================
+
+// Dashboard page
+app.get('/', (req, res) => {
+  res.json({
+    page: 'dashboard-overview',
+    title: 'Dashboard Overview',
+    component: 'DashboardOverview',
+    breadcrumb: [
+      { label: 'Dashboard', href: '/', active: true }
+    ]
+  });
+});
+
+app.get('/dashboard-overview', (req, res) => {
+  res.json({
+    page: 'dashboard-overview',
+    title: 'Dashboard Overview',
+    component: 'DashboardOverview',
+    breadcrumb: [
+      { label: 'Dashboard', href: '/', active: true }
+    ]
+  });
+});
+
+// Order Management page
+app.get('/order-management', (req, res) => {
+  res.json({
+    page: 'order-management',
+    title: 'Order Management',
+    component: 'OrderManagement',
+    breadcrumb: [
+      { label: 'Dashboard', href: '/' },
+      { label: 'Orders', href: '/order-management', active: true }
+    ]
+  });
+});
+
+// Order Details page
+app.get('/order-details', (req, res) => {
+  const orderId = req.query.id || 'ORD-2025-001';
+  res.json({
+    page: 'order-details',
+    title: `Order Details - ${orderId}`,
+    component: 'OrderDetails',
+    params: { orderId },
+    breadcrumb: [
+      { label: 'Dashboard', href: '/' },
+      { label: 'Orders', href: '/order-management' },
+      { label: `Order ${orderId}`, href: `/order-details?id=${orderId}`, active: true }
+    ]
+  });
+});
+
+// Menu Management page
+app.get('/menu-management', (req, res) => {
+  res.json({
+    page: 'menu-management',
+    title: 'Menu Management',
+    component: 'MenuManagement',
+    breadcrumb: [
+      { label: 'Dashboard', href: '/' },
+      { label: 'Menu', href: '/menu-management', active: true }
+    ]
+  });
+});
+
+// User Management page
+app.get('/user-management', (req, res) => {
+  res.json({
+    page: 'user-management',
+    title: 'User Management',
+    component: 'UserManagement',
+    breadcrumb: [
+      { label: 'Dashboard', href: '/' },
+      { label: 'Users', href: '/user-management', active: true }
+    ]
+  });
+});
+
+// Bill Generation page
+app.get('/bill-generation', (req, res) => {
+  const orderId = req.query.orderId;
+  res.json({
+    page: 'bill-generation',
+    title: 'Bill Generation',
+    component: 'BillGeneration',
+    params: { orderId },
+    breadcrumb: [
+      { label: 'Dashboard', href: '/' },
+      { label: 'Orders', href: '/order-management' },
+      { label: 'Generate Bill', href: '/bill-generation', active: true }
+    ]
+  });
+});
+
+// =============================================================================
+// DASHBOARD API ROUTES
 // =============================================================================
 
 // Get dashboard metrics
@@ -177,7 +279,7 @@ app.get('/api/dashboard/payment-summary', async (req, res) => {
 });
 
 // =============================================================================
-// MENU MANAGEMENT ROUTES
+// MENU MANAGEMENT API ROUTES
 // =============================================================================
 
 // Get all menu items
@@ -321,7 +423,7 @@ app.delete('/api/menu-items/:id', async (req, res) => {
 });
 
 // =============================================================================
-// ORDER MANAGEMENT ROUTES
+// ORDER MANAGEMENT API ROUTES
 // =============================================================================
 
 // Get all orders
@@ -434,7 +536,7 @@ app.put('/api/orders/:id/status', async (req, res) => {
 });
 
 // =============================================================================
-// USER MANAGEMENT ROUTES
+// USER MANAGEMENT API ROUTES
 // =============================================================================
 
 // Get all users
@@ -521,7 +623,7 @@ app.delete('/api/users/:id', async (req, res) => {
 });
 
 // =============================================================================
-// CUSTOMER ROUTES
+// CUSTOMERS API ROUTES
 // =============================================================================
 
 // Get all customers
@@ -650,6 +752,57 @@ app.post('/api/init-database', async (req, res) => {
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'FoodFlow Backend API is running' });
+});
+
+// =============================================================================
+// NAVIGATION API
+// =============================================================================
+
+// Get navigation structure
+app.get('/api/navigation', (req, res) => {
+  res.json([
+    {
+      path: '/',
+      label: 'Dashboard',
+      component: 'DashboardOverview',
+      icon: 'BarChart3'
+    },
+    {
+      path: '/order-management',
+      label: 'Orders',
+      component: 'OrderManagement',
+      icon: 'ShoppingBag'
+    },
+    {
+      path: '/menu-management',
+      label: 'Menu',
+      component: 'MenuManagement',
+      icon: 'UtensilsCrossed'
+    },
+    {
+      path: '/user-management',
+      label: 'Users',
+      component: 'UserManagement',
+      icon: 'Users'
+    },
+    {
+      path: '/bill-generation',
+      label: 'Billing',
+      component: 'BillGeneration',
+      icon: 'Receipt'
+    }
+  ]);
+});
+
+// Catch all handler: serve React app for any non-API routes
+app.get('*', (req, res) => {
+  // For API routes that don't exist, return 404
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  
+  // For page routes, serve the app
+  res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
 // Start server
