@@ -11,6 +11,7 @@ import UserCard from './components/UserCard';
 import AddUserModal from './components/AddUserModal';
 import EditUserModal from './components/EditUserModal';
 import ConfirmationModal from './components/ConfirmationModal';
+import { usersAPI } from '../../utils/api';
 
 const UserManagement = () => {
   const [users, setUsers] = useState([]);
@@ -32,66 +33,32 @@ const UserManagement = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [viewMode, setViewMode] = useState('table'); // 'table' or 'cards'
+  const [error, setError] = useState(null);
 
   // Mock current user ID (in real app, this would come from auth context)
   const currentUserId = 1;
 
-  // Mock users data
-  const mockUsers = [
-    {
-      id: 1,
-      name: "John Smith",
-      email: "john.smith@foodflow.com",
-      role: "superadmin",
-      status: "active",
-      createdAt: "2024-01-15T10:30:00Z",
-      lastLogin: "2025-01-11T14:22:00Z"
-    },
-    {
-      id: 2,
-      name: "Sarah Johnson",
-      email: "sarah.johnson@foodflow.com",
-      role: "admin",
-      status: "active",
-      createdAt: "2024-02-20T09:15:00Z",
-      lastLogin: "2025-01-11T11:45:00Z"
-    },
-    {
-      id: 3,
-      name: "Mike Davis",
-      email: "mike.davis@foodflow.com",
-      role: "admin",
-      status: "inactive",
-      createdAt: "2024-03-10T16:20:00Z",
-      lastLogin: "2025-01-09T08:30:00Z"
-    },
-    {
-      id: 4,
-      name: "Emily Wilson",
-      email: "emily.wilson@foodflow.com",
-      role: "admin",
-      status: "pending",
-      createdAt: "2025-01-10T12:00:00Z",
-      lastLogin: null
-    },
-    {
-      id: 5,
-      name: "David Brown",
-      email: "david.brown@foodflow.com",
-      role: "superadmin",
-      status: "active",
-      createdAt: "2024-01-05T08:45:00Z",
-      lastLogin: "2025-01-10T16:20:00Z"
-    }
-  ];
-
+  // Load users data
   useEffect(() => {
-    // Simulate loading users
-    setIsLoading(true);
-    setTimeout(() => {
-      setUsers(mockUsers);
-      setIsLoading(false);
-    }, 1000);
+    const loadUsersData = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const usersResponse = await usersAPI.getUsers();
+        setUsers(usersResponse);
+      } catch (error) {
+        console.error('Failed to load users data:', error);
+        setError('Failed to load users data. Please check your connection and try again.');
+        
+        // Fallback to empty array if API fails
+        setUsers([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadUsersData();
   }, []);
 
   useEffect(() => {
@@ -117,19 +84,14 @@ const UserManagement = () => {
   }, [users, searchTerm, roleFilter, statusFilter]);
 
   const handleAddUser = async (userData) => {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    const newUser = {
-      id: users.length + 1,
-      ...userData,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      lastLogin: null
-    };
-
-    setUsers(prev => [...prev, newUser]);
-    setIsAddModalOpen(false);
+    try {
+      const newUser = await usersAPI.addUser(userData);
+      setUsers(prev => [...prev, newUser]);
+      setIsAddModalOpen(false);
+    } catch (error) {
+      console.error('Failed to add user:', error);
+      setError('Failed to add user. Please try again.');
+    }
   };
 
   const handleEditUser = (user) => {
@@ -138,14 +100,17 @@ const UserManagement = () => {
   };
 
   const handleUpdateUser = async (updatedUser) => {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    setUsers(prev => prev.map(user => 
-      user.id === updatedUser.id ? updatedUser : user
-    ));
-    setIsEditModalOpen(false);
-    setSelectedUser(null);
+    try {
+      await usersAPI.updateUser(updatedUser.id, updatedUser);
+      setUsers(prev => prev.map(user => 
+        user.id === updatedUser.id ? updatedUser : user
+      ));
+      setIsEditModalOpen(false);
+      setSelectedUser(null);
+    } catch (error) {
+      console.error('Failed to update user:', error);
+      setError('Failed to update user. Please try again.');
+    }
   };
 
   const handleResetPassword = (user) => {
@@ -192,9 +157,6 @@ const UserManagement = () => {
     setIsLoading(true);
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
       switch (type) {
         case 'resetPassword':
           // In real app, this would trigger password reset email
@@ -203,20 +165,31 @@ const UserManagement = () => {
         
         case 'toggleStatus':
           const newStatus = user.status === 'active' ? 'inactive' : 'active';
+          await usersAPI.updateUser(user.id, { ...user, status: newStatus });
           setUsers(prev => prev.map(u => 
             u.id === user.id ? { ...u, status: newStatus } : u
           ));
           break;
         
         case 'deleteUser':
+          await usersAPI.deleteUser(user.id);
           setUsers(prev => prev.filter(u => u.id !== user.id));
           break;
       }
     } catch (error) {
       console.error('Error performing action:', error);
+      setError('Failed to perform action. Please try again.');
     } finally {
       setIsLoading(false);
-      setConfirmationModal({ isOpen: false, type: '', user: null, title: '', message: '', confirmText: '', variant: 'destructive' });
+      setConfirmationModal({ 
+        isOpen: false, 
+        type: '', 
+        user: null, 
+        title: '', 
+        message: '', 
+        confirmText: '', 
+        variant: 'destructive' 
+      });
     }
   };
 
@@ -251,6 +224,19 @@ const UserManagement = () => {
       <main className="ml-0 md:ml-60 pt-16 p-6">
         <div className="max-w-7xl mx-auto space-y-6">
           <Breadcrumb />
+          
+          {/* Error Message */}
+          {error && (
+            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <p className="text-destructive text-sm">{error}</p>
+              <button 
+                onClick={() => setError(null)}
+                className="text-destructive hover:text-destructive/80 text-sm underline mt-1"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
           
           {/* Page Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -333,7 +319,9 @@ const UserManagement = () => {
               <Icon name="Users" size={48} className="mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold text-foreground mb-2">No Users Found</h3>
               <p className="text-muted-foreground mb-4">
-                {searchTerm || roleFilter !== 'all' || statusFilter !== 'all' ?'No users match your current search criteria.' :'Get started by adding your first admin user.'
+                {searchTerm || roleFilter !== 'all' || statusFilter !== 'all' ?
+                  'No users match your current search criteria.' :
+                  'Get started by adding your first admin user.'
                 }
               </p>
               {(!searchTerm && roleFilter === 'all' && statusFilter === 'all') && (
