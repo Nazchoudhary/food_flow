@@ -3,6 +3,7 @@ import ScrollToTop from './components/ScrollToTop';
 import ErrorBoundary from './components/ErrorBoundary';
 import DatabaseInit from './components/DatabaseInit';
 import { healthCheck, getPageData } from './utils/api';
+import { API_CONFIG } from './utils/config';
 
 // Import all page components
 import DashboardOverview from './pages/dashboard-overview';
@@ -20,6 +21,7 @@ function App() {
   const [pageData, setPageData] = useState(null);
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
   const [error, setError] = useState(null);
+  const [backendHealth, setBackendHealth] = useState(null);
 
   // Component mapping
   const componentMap = {
@@ -65,16 +67,34 @@ function App() {
         setLoading(true);
         setError(null);
         
+        console.log('Checking backend health at:', API_CONFIG.BASE_URL);
+        
         // Check if backend is running
-        await healthCheck();
+        const health = await healthCheck();
+        setBackendHealth(health);
+        
+        console.log('Backend health response:', health);
         
         // Load page data for current path
         await loadPageData(currentPath);
       } catch (error) {
         console.error('Backend connection failed:', error);
-        setError('Unable to connect to backend server');
-        setAppReady(false);
-        setNeedsInit(true);
+        setError(`Unable to connect to backend: ${error.message}`);
+        setBackendHealth(null);
+        
+        // Check if we should show init screen or error
+        if (error.message.includes('503') || error.message.includes('database')) {
+          setNeedsInit(true);
+          setAppReady(false);
+        } else {
+          // For other errors, try to load page data anyway (might work with cached data)
+          try {
+            await loadPageData(currentPath);
+          } catch (pageError) {
+            setAppReady(false);
+            setNeedsInit(true);
+          }
+        }
       } finally {
         setLoading(false);
       }
@@ -130,13 +150,16 @@ function App() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Initializing FoodFlow Admin...</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            Backend URL: {API_CONFIG.BACKEND_URL}
+          </p>
         </div>
       </div>
     );
   }
 
   if (needsInit) {
-    return <DatabaseInit error={error} />;
+    return <DatabaseInit error={error} backendHealth={backendHealth} />;
   }
 
   if (!pageData) {
@@ -145,7 +168,12 @@ function App() {
         <div className="text-center">
           <p className="text-muted-foreground">Loading page...</p>
           {error && (
-            <p className="text-destructive text-sm mt-2">{error}</p>
+            <div className="mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg max-w-md">
+              <p className="text-destructive text-sm">{error}</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Backend: {API_CONFIG.BACKEND_URL}
+              </p>
+            </div>
           )}
         </div>
       </div>
@@ -162,6 +190,7 @@ function App() {
         pageData={pageData} 
         navigate={navigateToPage}
         currentPath={currentPath}
+        backendHealth={backendHealth}
       />
     </ErrorBoundary>
   );
