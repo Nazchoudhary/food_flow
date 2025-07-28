@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Icon from '../AppIcon';
 import { navigate, getCurrentPath } from '../../utils/navigation';
+import { getNavigation } from '../../utils/api';
 
 const Sidebar = () => {
   const [isMobile, setIsMobile] = useState(false);
@@ -12,8 +13,7 @@ const Sidebar = () => {
   useEffect(() => {
     const loadNavigation = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/navigation');
-        const items = await response.json();
+        const items = await getNavigation();
         setNavigationItems(items);
       } catch (error) {
         console.error('Failed to load navigation:', error);
