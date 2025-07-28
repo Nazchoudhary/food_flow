@@ -11,6 +11,7 @@ import MenuItemModal from './components/MenuItemModal';
 import MenuItemCard from './components/MenuItemCard';
 import BulkActions from './components/BulkActions';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
+import { menuAPI } from '../../utils/api';
 
 const MenuManagement = () => {
   const [menuItems, setMenuItems] = useState([]);
@@ -25,89 +26,38 @@ const MenuManagement = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingItem, setDeletingItem] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Mock data
-  const mockMenuItems = [
-    {
-      id: "1",
-      name: "Classic Margherita Pizza",
-      category: "Pizza",
-      price: 12.99,
-      description: "Fresh tomato sauce, mozzarella cheese, and basil leaves on a crispy crust",
-      status: "active"
-    },
-    {
-      id: "2",
-      name: "Grilled Chicken Caesar Salad",
-      category: "Salads",
-      price: 14.50,
-      description: "Crisp romaine lettuce, grilled chicken, parmesan cheese, and caesar dressing",
-      status: "active"
-    },
-    {
-      id: "3",
-      name: "Beef Burger Deluxe",
-      category: "Burgers",
-      price: 16.99,
-      description: "Juicy beef patty with lettuce, tomato, cheese, and special sauce",
-      status: "active"
-    },
-    {
-      id: "4",
-      name: "Chocolate Lava Cake",
-      category: "Desserts",
-      price: 8.99,
-      description: "Warm chocolate cake with molten center, served with vanilla ice cream",
-      status: "active"
-    },
-    {
-      id: "5",
-      name: "Fish and Chips",
-      category: "Main Course",
-      price: 18.50,
-      description: "Beer-battered fish with crispy fries and tartar sauce",
-      status: "inactive"
-    },
-    {
-      id: "6",
-      name: "Vegetarian Pasta",
-      category: "Pasta",
-      price: 13.99,
-      description: "Penne pasta with seasonal vegetables in marinara sauce",
-      status: "active"
-    },
-    {
-      id: "7",
-      name: "BBQ Chicken Wings",
-      category: "Appetizers",
-      price: 11.99,
-      description: "Crispy chicken wings tossed in tangy BBQ sauce",
-      status: "active"
-    },
-    {
-      id: "8",
-      name: "Greek Salad",
-      category: "Salads",
-      price: 10.99,
-      description: "Mixed greens, olives, feta cheese, and Greek dressing",
-      status: "inactive"
-    }
-  ];
-
-  const mockCategories = [
-    { id: "pizza", name: "Pizza", itemCount: 1 },
-    { id: "salads", name: "Salads", itemCount: 2 },
-    { id: "burgers", name: "Burgers", itemCount: 1 },
-    { id: "desserts", name: "Desserts", itemCount: 1 },
-    { id: "main-course", name: "Main Course", itemCount: 1 },
-    { id: "pasta", name: "Pasta", itemCount: 1 },
-    { id: "appetizers", name: "Appetizers", itemCount: 1 }
-  ];
-
+  // Load menu data
   useEffect(() => {
-    setMenuItems(mockMenuItems);
-    setCategories(mockCategories);
-    setFilteredItems(mockMenuItems);
+    const loadMenuData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const [itemsResponse, categoriesResponse] = await Promise.all([
+          menuAPI.getMenuItems(),
+          menuAPI.getCategories()
+        ]);
+
+        setMenuItems(itemsResponse);
+        setCategories(categoriesResponse);
+        setFilteredItems(itemsResponse);
+      } catch (error) {
+        console.error('Failed to load menu data:', error);
+        setError('Failed to load menu data. Please check your connection and try again.');
+        
+        // Fallback to empty arrays if API fails
+        setMenuItems([]);
+        setCategories([]);
+        setFilteredItems([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadMenuData();
   }, []);
 
   useEffect(() => {
@@ -161,7 +111,7 @@ const MenuManagement = () => {
     }
 
     setFilteredItems(filtered);
-  }, [menuItems, selectedCategory, searchTerm, sortConfig]);
+  }, [menuItems, selectedCategory, searchTerm, sortConfig, categories]);
 
   const handleSort = (key) => {
     setSortConfig(prevConfig => ({
@@ -180,18 +130,30 @@ const MenuManagement = () => {
     setIsModalOpen(true);
   };
 
-  const handleSaveItem = (itemData) => {
-    if (editingItem) {
-      // Update existing item
-      setMenuItems(prev => prev.map(item => 
-        item.id === editingItem.id ? { ...itemData, id: editingItem.id } : item
-      ));
-    } else {
-      // Add new item
-      setMenuItems(prev => [...prev, { ...itemData, id: Date.now().toString() }]);
+  const handleSaveItem = async (itemData) => {
+    try {
+      if (editingItem) {
+        // Update existing item
+        await menuAPI.updateMenuItem(editingItem.id, itemData);
+        setMenuItems(prev => prev.map(item => 
+          item.id === editingItem.id ? { ...itemData, id: editingItem.id } : item
+        ));
+      } else {
+        // Add new item
+        const newItem = await menuAPI.addMenuItem(itemData);
+        setMenuItems(prev => [...prev, newItem]);
+      }
+
+      // Refresh categories in case a new one was created
+      const categoriesResponse = await menuAPI.getCategories();
+      setCategories(categoriesResponse);
+
+      setIsModalOpen(false);
+      setEditingItem(null);
+    } catch (error) {
+      console.error('Failed to save menu item:', error);
+      setError('Failed to save menu item. Please try again.');
     }
-    setIsModalOpen(false);
-    setEditingItem(null);
   };
 
   const handleDeleteItem = (itemId) => {
@@ -200,27 +162,46 @@ const MenuManagement = () => {
     setIsDeleteModalOpen(true);
   };
 
-  const handleConfirmDelete = () => {
-    if (deletingItem) {
-      if (Array.isArray(deletingItem.id)) {
-        // Bulk delete
-        setMenuItems(prev => prev.filter(item => !deletingItem.id.includes(item.id)));
-        setSelectedItems([]);
-      } else {
-        // Single delete
-        setMenuItems(prev => prev.filter(item => item.id !== deletingItem.id));
+  const handleConfirmDelete = async () => {
+    try {
+      if (deletingItem) {
+        if (Array.isArray(deletingItem.id)) {
+          // Bulk delete
+          await Promise.all(
+            deletingItem.id.map(id => menuAPI.deleteMenuItem(id))
+          );
+          setMenuItems(prev => prev.filter(item => !deletingItem.id.includes(item.id)));
+          setSelectedItems([]);
+        } else {
+          // Single delete
+          await menuAPI.deleteMenuItem(deletingItem.id);
+          setMenuItems(prev => prev.filter(item => item.id !== deletingItem.id));
+        }
       }
+      setIsDeleteModalOpen(false);
+      setDeletingItem(null);
+    } catch (error) {
+      console.error('Failed to delete menu item:', error);
+      setError('Failed to delete menu item. Please try again.');
     }
-    setIsDeleteModalOpen(false);
-    setDeletingItem(null);
   };
 
-  const handleStatusToggle = (itemId) => {
-    setMenuItems(prev => prev.map(item =>
-      item.id === itemId
-        ? { ...item, status: item.status === 'active' ? 'inactive' : 'active' }
-        : item
-    ));
+  const handleStatusToggle = async (itemId) => {
+    try {
+      const item = menuItems.find(item => item.id === itemId);
+      const newStatus = item.status === 'active' ? 'inactive' : 'active';
+      
+      await menuAPI.updateMenuItem(itemId, { ...item, status: newStatus });
+      
+      setMenuItems(prev => prev.map(item =>
+        item.id === itemId
+          ? { ...item, status: newStatus }
+          : item
+      ));
+    } catch (error) {
+      console.error('Failed to update item status:', error);
+      setError('Failed to update item status. Please try again.');
+    }
   };
 
   const handleItemSelect = (itemId) => {
@@ -244,16 +225,46 @@ const MenuManagement = () => {
     setIsDeleteModalOpen(true);
   };
 
-  const handleBulkStatusChange = (status) => {
-    setMenuItems(prev => prev.map(item =>
-      selectedItems.includes(item.id) ? { ...item, status } : item
-    ));
-    setSelectedItems([]);
+  const handleBulkStatusChange = async (status) => {
+    try {
+      // Update all selected items
+      await Promise.all(
+        selectedItems.map(itemId => {
+          const item = menuItems.find(item => item.id === itemId);
+          return menuAPI.updateMenuItem(itemId, { ...item, status });
+        })
+      );
+
+      setMenuItems(prev => prev.map(item =>
+        selectedItems.includes(item.id) ? { ...item, status } : item
+      ));
+      setSelectedItems([]);
+    } catch (error) {
+      console.error('Failed to update item status:', error);
+      setError('Failed to update item status. Please try again.');
+    }
   };
 
   const handleClearSelection = () => {
     setSelectedItems([]);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <Sidebar />
+        <main className="ml-0 md:ml-60 pt-16 min-h-screen">
+          <div className="p-6 flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading menu data...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -263,6 +274,19 @@ const MenuManagement = () => {
       <main className="ml-0 md:ml-60 pt-16 min-h-screen">
         <div className="p-6">
           <Breadcrumb />
+          
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <p className="text-destructive text-sm">{error}</p>
+              <button 
+                onClick={() => setError(null)}
+                className="text-destructive hover:text-destructive/80 text-sm underline mt-1"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
           
           {/* Page Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
