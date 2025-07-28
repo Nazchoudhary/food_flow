@@ -38,6 +38,8 @@ function App() {
   const loadPageData = async (path) => {
     try {
       setError(null);
+      
+      // Try to get page data from backend
       const data = await getPageData(path, window.location.search);
       
       setPageData(data);
@@ -51,11 +53,36 @@ function App() {
     } catch (error) {
       console.error('Failed to load page data:', error);
       setError('Unable to load page data');
-      setPageData({ 
-        component: 'NotFound', 
-        title: 'Page Not Found',
-        page: '404'
-      });
+      
+      // Fallback page data for when backend is not available
+      const fallbackPageData = {
+        component: 'DashboardOverview',
+        title: 'Dashboard Overview',
+        page: 'dashboard-overview',
+        breadcrumb: [
+          { label: 'Dashboard', href: '/', active: true }
+        ]
+      };
+      
+      // Determine which component to show based on path
+      if (path.includes('order-management')) {
+        fallbackPageData.component = 'OrderManagement';
+        fallbackPageData.title = 'Order Management';
+      } else if (path.includes('menu-management')) {
+        fallbackPageData.component = 'MenuManagement';
+        fallbackPageData.title = 'Menu Management';
+      } else if (path.includes('user-management')) {
+        fallbackPageData.component = 'UserManagement';
+        fallbackPageData.title = 'User Management';
+      } else if (path.includes('bill-generation')) {
+        fallbackPageData.component = 'BillGeneration';
+        fallbackPageData.title = 'Bill Generation';
+      } else if (path.includes('order-details')) {
+        fallbackPageData.component = 'OrderDetails';
+        fallbackPageData.title = 'Order Details';
+      }
+      
+      setPageData(fallbackPageData);
       setAppReady(true);
     }
   };
@@ -69,32 +96,31 @@ function App() {
         
         console.log('Checking backend health at:', API_CONFIG.BASE_URL);
         
-        // Check if backend is running
-        const health = await healthCheck();
-        setBackendHealth(health);
-        
-        console.log('Backend health response:', health);
-        
-        // Load page data for current path
-        await loadPageData(currentPath);
-      } catch (error) {
-        console.error('Backend connection failed:', error);
-        setError(`Unable to connect to backend: ${error.message}`);
-        setBackendHealth(null);
-        
-        // Check if we should show init screen or error
-        if (error.message.includes('503') || error.message.includes('database')) {
-          setNeedsInit(true);
-          setAppReady(false);
-        } else {
-          // For other errors, try to load page data anyway (might work with cached data)
-          try {
-            await loadPageData(currentPath);
-          } catch (pageError) {
-            setAppReady(false);
-            setNeedsInit(true);
-          }
+        // Try to check if backend is running
+        try {
+          const health = await healthCheck();
+          setBackendHealth(health);
+          console.log('Backend health response:', health);
+        } catch (healthError) {
+          console.warn('Backend health check failed, continuing with fallback mode:', healthError);
+          setBackendHealth(null);
         }
+        
+        // Always try to load page data (with fallback)
+        await loadPageData(currentPath);
+        
+      } catch (error) {
+        console.error('App initialization failed:', error);
+        setError(`Application initialization failed: ${error.message}`);
+        
+        // Set fallback state
+        setPageData({
+          component: 'NotFound',
+          title: 'Application Error',
+          page: 'error'
+        });
+        setAppReady(true);
+        setNeedsInit(false);
       } finally {
         setLoading(false);
       }
@@ -158,7 +184,8 @@ function App() {
     );
   }
 
-  if (needsInit) {
+  // Show database init screen only if backend is healthy but database needs setup
+  if (needsInit && backendHealth) {
     return <DatabaseInit error={error} backendHealth={backendHealth} />;
   }
 
@@ -191,6 +218,7 @@ function App() {
         navigate={navigateToPage}
         currentPath={currentPath}
         backendHealth={backendHealth}
+        fallbackMode={!backendHealth}
       />
     </ErrorBoundary>
   );
