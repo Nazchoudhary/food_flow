@@ -12,6 +12,9 @@ import {
   mockNavigation
 } from './mockData';
 
+// Track if we're in demo mode (backend unavailable)
+let demoMode = false;
+
 // Create axios instance
 const api = axios.create({
   baseURL: API_CONFIG.BASE_URL,
@@ -21,13 +24,14 @@ const api = axios.create({
   },
 });
 
-// Track if we're in demo mode (backend unavailable)
-let demoMode = false;
-
 // Check if response is JSON
 const isJsonResponse = (response) => {
-  const contentType = response.headers?.['content-type'];
-  return contentType && contentType.includes('application/json');
+  try {
+    const contentType = response.headers?.['content-type'] || response.headers?.['Content-Type'];
+    return contentType && contentType.includes('application/json');
+  } catch (error) {
+    return false;
+  }
 };
 
 // Check if error suggests backend is unavailable
@@ -35,7 +39,7 @@ const isBackendUnavailable = (error) => {
   if (!error.response) return true; // Network error
   
   const status = error.response.status;
-  const contentType = error.response.headers?.['content-type'];
+  const contentType = error.response.headers?.['content-type'] || error.response.headers?.['Content-Type'];
   
   // 404, 502, 503 or HTML response suggests backend is not available
   return status === 404 || status === 502 || status === 503 || 
@@ -45,9 +49,13 @@ const isBackendUnavailable = (error) => {
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    try {
+      const token = localStorage.getItem('authToken');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.warn('Failed to get auth token:', error);
     }
     return config;
   },
@@ -59,84 +67,102 @@ api.interceptors.request.use(
 // Response interceptor to handle errors with retry logic
 api.interceptors.response.use(
   (response) => {
-    // Check if response is actually JSON
-    if (!isJsonResponse(response)) {
-      throw new Error('Backend returned non-JSON response. Backend may not be running.');
+    try {
+      // Check if response is actually JSON
+      if (!isJsonResponse(response)) {
+        console.warn('Non-JSON response received, switching to demo mode');
+        demoMode = true;
+        // Don't throw here, let the makeRequest function handle it
+      }
+      return response;
+    } catch (error) {
+      console.warn('Response interceptor error:', error);
+      return response;
     }
-    return response;
   },
   async (error) => {
-    const originalRequest = error.config;
+    try {
+      const originalRequest = error.config;
 
-    // Check if backend is unavailable
-    if (isBackendUnavailable(error)) {
-      demoMode = true;
-      throw new Error('Backend is not available. Running in demo mode.');
-    }
+      // Check if backend is unavailable
+      if (isBackendUnavailable(error)) {
+        console.log('Backend unavailable, switching to demo mode');
+        demoMode = true;
+        // Don't throw here, let the makeRequest function handle the fallback
+        return Promise.reject(error);
+      }
 
-    // Handle 401 errors
-    if (error.response?.status === 401) {
-      localStorage.removeItem('authToken');
-      window.location.href = '/login';
-      return Promise.reject(error);
-    }
+      // Handle 401 errors
+      if (error.response?.status === 401) {
+        try {
+          localStorage.removeItem('authToken');
+          window.location.href = '/login';
+        } catch (localStorageError) {
+          console.warn('Failed to handle 401 error:', localStorageError);
+        }
+        return Promise.reject(error);
+      }
 
-    // Retry logic for network errors (but not if we're already in demo mode)
-    if (!error.response && !originalRequest._retry && !demoMode) {
-      originalRequest._retry = true;
-      
-      // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, API_CONFIG.RETRY_DELAY));
-      
-      try {
-        return await api(originalRequest);
-      } catch (retryError) {
-        console.error('API retry failed:', retryError);
-        if (isBackendUnavailable(retryError)) {
-          demoMode = true;
+      // Retry logic for network errors (but not if we're already in demo mode)
+      if (!error.response && !originalRequest._retry && !demoMode) {
+        originalRequest._retry = true;
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, API_CONFIG.RETRY_DELAY));
+        
+        try {
+          return await api(originalRequest);
+        } catch (retryError) {
+          console.warn('API retry failed:', retryError);
+          if (isBackendUnavailable(retryError)) {
+            demoMode = true;
+          }
+          return Promise.reject(retryError);
         }
       }
-    }
 
-    return Promise.reject(error);
+      return Promise.reject(error);
+    } catch (interceptorError) {
+      console.error('Error in response interceptor:', interceptorError);
+      return Promise.reject(error);
+    }
   }
 );
 
-// Helper function to make requests with better error handling
-const makeRequest = async (requestFn, fallbackData = null) => {
-  if (demoMode && fallbackData) {
-    console.log('Demo mode: returning mock data');
-    return fallbackData;
-  }
-
+// Safe API wrapper that handles all errors gracefully
+const safeApiCall = async (apiCall, fallbackData = null) => {
   try {
-    const response = await requestFn();
+    if (demoMode && fallbackData !== null) {
+      console.log('Demo mode: returning mock data');
+      return fallbackData;
+    }
+
+    const response = await apiCall();
+    
+    // Check if we got a valid response
+    if (!response || !response.data) {
+      throw new Error('Invalid response received');
+    }
+    
     return response.data;
   } catch (error) {
-    console.error('API request failed:', error);
+    console.warn('API call failed:', error);
     
-    // If backend is unavailable and we have fallback data, use it
-    if (isBackendUnavailable(error) && fallbackData) {
+    // If we have fallback data and the backend seems unavailable, use it
+    if (fallbackData !== null && (isBackendUnavailable(error) || demoMode)) {
+      console.log('Using fallback data due to backend unavailability');
       demoMode = true;
-      console.log('Backend unavailable, switching to demo mode with mock data');
       return fallbackData;
     }
     
-    // Provide more specific error messages
-    if (!error.response) {
-      throw new Error('Unable to connect to server. Running in demo mode.');
-    }
-    
-    if (error.response.status >= 500) {
-      throw new Error('Server error. Please try again later.');
-    }
-    
-    if (error.response.status === 404) {
-      throw new Error('API endpoint not found. Backend may not be properly configured.');
-    }
-    
-    throw new Error(error.response?.data?.error || error.message || 'An unexpected error occurred.');
+    // Re-throw if no fallback available
+    throw error;
   }
+};
+
+// Simpler makeRequest function
+const makeRequest = async (requestFn, fallbackData = null) => {
+  return safeApiCall(requestFn, fallbackData);
 };
 
 // =============================================================================
@@ -382,7 +408,14 @@ export const getPageData = async (path, searchParams = '') => {
       }
     }
 
-    const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/page-data?${params.toString()}`);
+    const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/page-data?${params.toString()}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      timeout: 5000
+    });
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
@@ -395,7 +428,7 @@ export const getPageData = async (path, searchParams = '') => {
     
     return await response.json();
   } catch (error) {
-    console.error('Page data fetch failed:', error);
+    console.warn('Page data fetch failed, using fallback:', error);
     demoMode = true;
     return defaultData;
   }
@@ -411,7 +444,14 @@ export const getNavigation = async () => {
   }
 
   try {
-    const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/navigation`);
+    const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/navigation`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      timeout: 5000
+    });
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
@@ -424,7 +464,7 @@ export const getNavigation = async () => {
     
     return await response.json();
   } catch (error) {
-    console.error('Navigation fetch failed:', error);
+    console.warn('Navigation fetch failed, using fallback:', error);
     demoMode = true;
     return mockNavigation;
   }
@@ -456,7 +496,20 @@ export const healthCheck = async () => {
     };
   }
 
-  return makeRequest(() => api.get('/health'));
+  try {
+    const response = await makeRequest(() => api.get('/health'));
+    return response;
+  } catch (error) {
+    console.warn('Health check failed, switching to demo mode:', error);
+    demoMode = true;
+    return {
+      status: 'DEMO',
+      message: 'Backend health check failed - running in demo mode',
+      timestamp: new Date().toISOString(),
+      environment: 'demo',
+      database: 'mock'
+    };
+  }
 };
 
 // =============================================================================
@@ -467,6 +520,12 @@ export const isDemoMode = () => demoMode;
 
 export const setDemoMode = (enabled) => {
   demoMode = enabled;
+  console.log('Demo mode set to:', enabled);
+};
+
+export const resetDemoMode = () => {
+  demoMode = false;
+  console.log('Demo mode reset');
 };
 
 export default api;
