@@ -1,0 +1,28 @@
+
+> foodflow-backend@1.0.0 dev
+> nodemon index.js
+
+[33m[nodemon] 3.1.10[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): *.*[39m
+[33m[nodemon] watching extensions: js,mjs,cjs,json[39m
+[32m[nodemon] starting `node index.js`[39m
+[dotenv@17.2.1] injecting env (6) from .env -- tip: ⚙️  override existing env vars with { override: true }
+/app/code/backend/node_modules/path-to-regexp/dist/index.js:73
+            throw new TypeError(`Missing parameter name at ${i}: ${DEBUG_URL}`);
+            ^
+
+TypeError: Missing parameter name at 1: https://git.new/pathToRegexpError
+    at name (/app/code/backend/node_modules/path-to-regexp/dist/index.js:73:19)
+    at lexer (/app/code/backend/node_modules/path-to-regexp/dist/index.js:91:27)
+    at lexer.next (<anonymous>)
+    at Iter.peek (/app/code/backend/node_modules/path-to-regexp/dist/index.js:106:38)
+    at Iter.tryConsume (/app/code/backend/node_modules/path-to-regexp/dist/index.js:112:28)
+    at Iter.text (/app/code/backend/node_modules/path-to-regexp/dist/index.js:128:30)
+    at consume (/app/code/backend/node_modules/path-to-regexp/dist/index.js:152:29)
+    at parse (/app/code/backend/node_modules/path-to-regexp/dist/index.js:183:20)
+    at /app/code/backend/node_modules/path-to-regexp/dist/index.js:294:74
+    at Array.map (<anonymous>)
+
+Node.js v22.16.0
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
