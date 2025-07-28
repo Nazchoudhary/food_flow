@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ScrollToTop from './components/ScrollToTop';
 import ErrorBoundary from './components/ErrorBoundary';
 import DatabaseInit from './components/DatabaseInit';
-import { healthCheck, getPageData } from './utils/api';
+import { healthCheck, getPageData, isDemoMode } from './utils/api';
 import { API_CONFIG } from './utils/config';
 
 // Import all page components
@@ -22,6 +22,7 @@ function App() {
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
   const [error, setError] = useState(null);
   const [backendHealth, setBackendHealth] = useState(null);
+  const [demoMode, setDemoMode] = useState(false);
 
   // Component mapping
   const componentMap = {
@@ -39,50 +40,33 @@ function App() {
     try {
       setError(null);
       
-      // Try to get page data from backend
+      // Get page data (will fallback to mock data if backend unavailable)
       const data = await getPageData(path, window.location.search);
       
       setPageData(data);
       setAppReady(true);
-      setNeedsInit(false);
       
       // Update document title
       if (data.title) {
-        document.title = `${data.title} - FoodFlow Admin`;
+        document.title = `${data.title} - FoodFlow Admin${isDemoMode() ? ' (Demo)' : ''}`;
       }
+      
+      // Update demo mode state
+      setDemoMode(isDemoMode());
+      
     } catch (error) {
       console.error('Failed to load page data:', error);
       setError('Unable to load page data');
       
-      // Fallback page data for when backend is not available
-      const fallbackPageData = {
+      // Ultimate fallback
+      setPageData({
         component: 'DashboardOverview',
         title: 'Dashboard Overview',
         page: 'dashboard-overview',
         breadcrumb: [
           { label: 'Dashboard', href: '/', active: true }
         ]
-      };
-      
-      // Determine which component to show based on path
-      if (path.includes('order-management')) {
-        fallbackPageData.component = 'OrderManagement';
-        fallbackPageData.title = 'Order Management';
-      } else if (path.includes('menu-management')) {
-        fallbackPageData.component = 'MenuManagement';
-        fallbackPageData.title = 'Menu Management';
-      } else if (path.includes('user-management')) {
-        fallbackPageData.component = 'UserManagement';
-        fallbackPageData.title = 'User Management';
-      } else if (path.includes('bill-generation')) {
-        fallbackPageData.component = 'BillGeneration';
-        fallbackPageData.title = 'Bill Generation';
-      } else if (path.includes('order-details')) {
-        fallbackPageData.component = 'OrderDetails';
-        fallbackPageData.title = 'Order Details';
-      }
-      
-      setPageData(fallbackPageData);
+      });
       setAppReady(true);
     }
   };
@@ -101,12 +85,26 @@ function App() {
           const health = await healthCheck();
           setBackendHealth(health);
           console.log('Backend health response:', health);
+          
+          // Check if we're in demo mode
+          if (health.status === 'DEMO') {
+            setDemoMode(true);
+            setNeedsInit(false);
+          } else {
+            setDemoMode(false);
+            // Only show init screen if backend is healthy but database might need setup
+            if (health.database === 'disconnected') {
+              setNeedsInit(true);
+            }
+          }
         } catch (healthError) {
-          console.warn('Backend health check failed, continuing with fallback mode:', healthError);
+          console.warn('Backend health check failed, entering demo mode:', healthError);
           setBackendHealth(null);
+          setDemoMode(true);
+          setNeedsInit(false);
         }
         
-        // Always try to load page data (with fallback)
+        // Always try to load page data (with fallback to mock data)
         await loadPageData(currentPath);
         
       } catch (error) {
@@ -115,12 +113,13 @@ function App() {
         
         // Set fallback state
         setPageData({
-          component: 'NotFound',
-          title: 'Application Error',
-          page: 'error'
+          component: 'DashboardOverview',
+          title: 'Dashboard Overview (Demo)',
+          page: 'dashboard-overview'
         });
         setAppReady(true);
         setNeedsInit(false);
+        setDemoMode(true);
       } finally {
         setLoading(false);
       }
@@ -185,7 +184,7 @@ function App() {
   }
 
   // Show database init screen only if backend is healthy but database needs setup
-  if (needsInit && backendHealth) {
+  if (needsInit && backendHealth && !demoMode) {
     return <DatabaseInit error={error} backendHealth={backendHealth} />;
   }
 
@@ -213,12 +212,22 @@ function App() {
   return (
     <ErrorBoundary>
       <ScrollToTop />
+      
+      {/* Demo Mode Banner */}
+      {demoMode && (
+        <div className="bg-amber-100 border-b border-amber-200 px-4 py-2 text-center">
+          <p className="text-amber-800 text-sm">
+            ⚡ <strong>Demo Mode:</strong> Backend is not available. Using mock data for demonstration.
+          </p>
+        </div>
+      )}
+      
       <ComponentToRender 
         pageData={pageData} 
         navigate={navigateToPage}
         currentPath={currentPath}
         backendHealth={backendHealth}
-        fallbackMode={!backendHealth}
+        demoMode={demoMode}
       />
     </ErrorBoundary>
   );
