@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ScrollToTop from './components/ScrollToTop';
 import ErrorBoundary from './components/ErrorBoundary';
 import DatabaseInit from './components/DatabaseInit';
-import { healthCheck } from './utils/api';
+import { healthCheck, getPageData } from './utils/api';
 
 // Import all page components
 import DashboardOverview from './pages/dashboard-overview';
@@ -19,6 +19,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [pageData, setPageData] = useState(null);
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const [error, setError] = useState(null);
 
   // Component mapping
   const componentMap = {
@@ -34,32 +35,20 @@ function App() {
   // Load page data from backend route
   const loadPageData = async (path) => {
     try {
-      const params = new URLSearchParams();
-      params.append('path', path);
+      setError(null);
+      const data = await getPageData(path, window.location.search);
       
-      // Add query parameters if they exist
-      const searchParams = new URLSearchParams(window.location.search);
-      for (const [key, value] of searchParams) {
-        params.append(key, value);
-      }
-
-      const response = await fetch(`http://localhost:5000/api/page-data?${params.toString()}`);
+      setPageData(data);
+      setAppReady(true);
+      setNeedsInit(false);
       
-      if (response.ok) {
-        const data = await response.json();
-        setPageData(data);
-        setAppReady(true);
-        setNeedsInit(false);
-        
-        // Update document title
-        if (data.title) {
-          document.title = `${data.title} - FoodFlow Admin`;
-        }
-      } else {
-        throw new Error('Failed to load page data');
+      // Update document title
+      if (data.title) {
+        document.title = `${data.title} - FoodFlow Admin`;
       }
     } catch (error) {
       console.error('Failed to load page data:', error);
+      setError('Unable to load page data');
       setPageData({ 
         component: 'NotFound', 
         title: 'Page Not Found',
@@ -74,6 +63,7 @@ function App() {
     const checkAppStatus = async () => {
       try {
         setLoading(true);
+        setError(null);
         
         // Check if backend is running
         await healthCheck();
@@ -82,6 +72,7 @@ function App() {
         await loadPageData(currentPath);
       } catch (error) {
         console.error('Backend connection failed:', error);
+        setError('Unable to connect to backend server');
         setAppReady(false);
         setNeedsInit(true);
       } finally {
@@ -145,7 +136,7 @@ function App() {
   }
 
   if (needsInit) {
-    return <DatabaseInit />;
+    return <DatabaseInit error={error} />;
   }
 
   if (!pageData) {
@@ -153,6 +144,9 @@ function App() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted-foreground">Loading page...</p>
+          {error && (
+            <p className="text-destructive text-sm mt-2">{error}</p>
+          )}
         </div>
       </div>
     );
