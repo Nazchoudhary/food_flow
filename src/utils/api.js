@@ -1,11 +1,10 @@
 import axios from 'axios';
-
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import { API_CONFIG } from './config';
 
 // Create axios instance
 const api = axios.create({
-  baseURL: BASE_URL,
-  timeout: 10000,
+  baseURL: API_CONFIG.BASE_URL,
+  timeout: API_CONFIG.TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -25,17 +24,61 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle errors
+// Response interceptor to handle errors with retry logic
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
+
+    // Handle 401 errors
     if (error.response?.status === 401) {
       localStorage.removeItem('authToken');
       window.location.href = '/login';
+      return Promise.reject(error);
     }
+
+    // Retry logic for network errors
+    if (!error.response && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, API_CONFIG.RETRY_DELAY));
+      
+      try {
+        return await api(originalRequest);
+      } catch (retryError) {
+        console.error('API retry failed:', retryError);
+      }
+    }
+
     return Promise.reject(error);
   }
 );
+
+// Helper function to make requests with better error handling
+const makeRequest = async (requestFn) => {
+  try {
+    const response = await requestFn();
+    return response.data;
+  } catch (error) {
+    console.error('API request failed:', error);
+    
+    // Provide more specific error messages
+    if (!error.response) {
+      throw new Error('Unable to connect to server. Please check your internet connection.');
+    }
+    
+    if (error.response.status >= 500) {
+      throw new Error('Server error. Please try again later.');
+    }
+    
+    if (error.response.status === 404) {
+      throw new Error('Requested resource not found.');
+    }
+    
+    throw new Error(error.response?.data?.error || 'An unexpected error occurred.');
+  }
+};
 
 // =============================================================================
 // DASHBOARD API
@@ -43,18 +86,15 @@ api.interceptors.response.use(
 
 export const dashboardAPI = {
   getMetrics: async () => {
-    const response = await api.get('/dashboard/metrics');
-    return response.data;
+    return makeRequest(() => api.get('/dashboard/metrics'));
   },
 
   getRecentOrders: async () => {
-    const response = await api.get('/dashboard/recent-orders');
-    return response.data;
+    return makeRequest(() => api.get('/dashboard/recent-orders'));
   },
 
   getPaymentSummary: async () => {
-    const response = await api.get('/dashboard/payment-summary');
-    return response.data;
+    return makeRequest(() => api.get('/dashboard/payment-summary'));
   },
 };
 
@@ -64,28 +104,23 @@ export const dashboardAPI = {
 
 export const menuAPI = {
   getMenuItems: async () => {
-    const response = await api.get('/menu-items');
-    return response.data;
+    return makeRequest(() => api.get('/menu-items'));
   },
 
   getCategories: async () => {
-    const response = await api.get('/categories');
-    return response.data;
+    return makeRequest(() => api.get('/categories'));
   },
 
   addMenuItem: async (itemData) => {
-    const response = await api.post('/menu-items', itemData);
-    return response.data;
+    return makeRequest(() => api.post('/menu-items', itemData));
   },
 
   updateMenuItem: async (id, itemData) => {
-    const response = await api.put(`/menu-items/${id}`, itemData);
-    return response.data;
+    return makeRequest(() => api.put(`/menu-items/${id}`, itemData));
   },
 
   deleteMenuItem: async (id) => {
-    const response = await api.delete(`/menu-items/${id}`);
-    return response.data;
+    return makeRequest(() => api.delete(`/menu-items/${id}`));
   },
 };
 
@@ -102,18 +137,15 @@ export const ordersAPI = {
       }
     });
     
-    const response = await api.get(`/orders?${params.toString()}`);
-    return response.data;
+    return makeRequest(() => api.get(`/orders?${params.toString()}`));
   },
 
   getOrderStats: async () => {
-    const response = await api.get('/orders/stats');
-    return response.data;
+    return makeRequest(() => api.get('/orders/stats'));
   },
 
   updateOrderStatus: async (orderId, status) => {
-    const response = await api.put(`/orders/${orderId}/status`, { status });
-    return response.data;
+    return makeRequest(() => api.put(`/orders/${orderId}/status`, { status }));
   },
 };
 
@@ -123,23 +155,19 @@ export const ordersAPI = {
 
 export const usersAPI = {
   getUsers: async () => {
-    const response = await api.get('/users');
-    return response.data;
+    return makeRequest(() => api.get('/users'));
   },
 
   addUser: async (userData) => {
-    const response = await api.post('/users', userData);
-    return response.data;
+    return makeRequest(() => api.post('/users', userData));
   },
 
   updateUser: async (id, userData) => {
-    const response = await api.put(`/users/${id}`, userData);
-    return response.data;
+    return makeRequest(() => api.put(`/users/${id}`, userData));
   },
 
   deleteUser: async (id) => {
-    const response = await api.delete(`/users/${id}`);
-    return response.data;
+    return makeRequest(() => api.delete(`/users/${id}`));
   },
 };
 
@@ -149,9 +177,47 @@ export const usersAPI = {
 
 export const customersAPI = {
   getCustomers: async () => {
-    const response = await api.get('/customers');
-    return response.data;
+    return makeRequest(() => api.get('/customers'));
   },
+};
+
+// =============================================================================
+// PAGE DATA API
+// =============================================================================
+
+export const getPageData = async (path, searchParams = '') => {
+  const params = new URLSearchParams();
+  params.append('path', path);
+  
+  // Add additional search parameters
+  if (searchParams) {
+    const additionalParams = new URLSearchParams(searchParams);
+    for (const [key, value] of additionalParams) {
+      params.append(key, value);
+    }
+  }
+
+  const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/page-data?${params.toString()}`);
+  
+  if (!response.ok) {
+    throw new Error('Failed to load page data');
+  }
+  
+  return response.json();
+};
+
+// =============================================================================
+// NAVIGATION API
+// =============================================================================
+
+export const getNavigation = async () => {
+  const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/navigation`);
+  
+  if (!response.ok) {
+    throw new Error('Failed to load navigation');
+  }
+  
+  return response.json();
 };
 
 // =============================================================================
@@ -159,8 +225,7 @@ export const customersAPI = {
 // =============================================================================
 
 export const initializeDatabase = async () => {
-  const response = await api.post('/init-database');
-  return response.data;
+  return makeRequest(() => api.post('/init-database'));
 };
 
 // =============================================================================
@@ -168,8 +233,7 @@ export const initializeDatabase = async () => {
 // =============================================================================
 
 export const healthCheck = async () => {
-  const response = await api.get('/health');
-  return response.data;
+  return makeRequest(() => api.get('/health'));
 };
 
 export default api;
