@@ -13,9 +13,6 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// Serve static files from frontend build
-app.use(express.static(path.join(__dirname, '../dist')));
-
 // Database connection
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
@@ -59,101 +56,133 @@ const authenticateToken = (req, res, next) => {
 };
 
 // =============================================================================
-// PAGE ROUTES (Server-side routing)
+// API ROUTES
 // =============================================================================
 
-// Dashboard page
-app.get('/', (req, res) => {
-  res.json({
-    page: 'dashboard-overview',
-    title: 'Dashboard Overview',
-    component: 'DashboardOverview',
-    breadcrumb: [
-      { label: 'Dashboard', href: '/', active: true }
-    ]
-  });
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', message: 'FoodFlow Backend API is running' });
 });
 
-app.get('/dashboard-overview', (req, res) => {
-  res.json({
-    page: 'dashboard-overview',
-    title: 'Dashboard Overview',
-    component: 'DashboardOverview',
-    breadcrumb: [
-      { label: 'Dashboard', href: '/', active: true }
-    ]
-  });
-});
+// Get page data
+app.get('/api/page-data', (req, res) => {
+  const path = req.query.path || '/';
+  
+  const pageData = {
+    '/': {
+      page: 'dashboard-overview',
+      title: 'Dashboard Overview',
+      component: 'DashboardOverview',
+      breadcrumb: [
+        { label: 'Dashboard', href: '/', active: true }
+      ]
+    },
+    '/dashboard-overview': {
+      page: 'dashboard-overview',
+      title: 'Dashboard Overview',
+      component: 'DashboardOverview',
+      breadcrumb: [
+        { label: 'Dashboard', href: '/', active: true }
+      ]
+    },
+    '/order-management': {
+      page: 'order-management',
+      title: 'Order Management',
+      component: 'OrderManagement',
+      breadcrumb: [
+        { label: 'Dashboard', href: '/' },
+        { label: 'Orders', href: '/order-management', active: true }
+      ]
+    },
+    '/order-details': {
+      page: 'order-details',
+      title: `Order Details - ${req.query.id || 'ORD-2025-001'}`,
+      component: 'OrderDetails',
+      params: { orderId: req.query.id || 'ORD-2025-001' },
+      breadcrumb: [
+        { label: 'Dashboard', href: '/' },
+        { label: 'Orders', href: '/order-management' },
+        { label: `Order ${req.query.id || 'ORD-2025-001'}`, href: `/order-details?id=${req.query.id || 'ORD-2025-001'}`, active: true }
+      ]
+    },
+    '/menu-management': {
+      page: 'menu-management',
+      title: 'Menu Management',
+      component: 'MenuManagement',
+      breadcrumb: [
+        { label: 'Dashboard', href: '/' },
+        { label: 'Menu', href: '/menu-management', active: true }
+      ]
+    },
+    '/user-management': {
+      page: 'user-management',
+      title: 'User Management',
+      component: 'UserManagement',
+      breadcrumb: [
+        { label: 'Dashboard', href: '/' },
+        { label: 'Users', href: '/user-management', active: true }
+      ]
+    },
+    '/bill-generation': {
+      page: 'bill-generation',
+      title: 'Bill Generation',
+      component: 'BillGeneration',
+      params: { orderId: req.query.orderId },
+      breadcrumb: [
+        { label: 'Dashboard', href: '/' },
+        { label: 'Orders', href: '/order-management' },
+        { label: 'Generate Bill', href: '/bill-generation', active: true }
+      ]
+    }
+  };
 
-// Order Management page
-app.get('/order-management', (req, res) => {
-  res.json({
-    page: 'order-management',
-    title: 'Order Management',
-    component: 'OrderManagement',
+  const data = pageData[path] || {
+    page: '404',
+    title: 'Page Not Found',
+    component: 'NotFound',
     breadcrumb: [
       { label: 'Dashboard', href: '/' },
-      { label: 'Orders', href: '/order-management', active: true }
+      { label: 'Not Found', href: path, active: true }
     ]
-  });
+  };
+
+  res.json(data);
 });
 
-// Order Details page
-app.get('/order-details', (req, res) => {
-  const orderId = req.query.id || 'ORD-2025-001';
-  res.json({
-    page: 'order-details',
-    title: `Order Details - ${orderId}`,
-    component: 'OrderDetails',
-    params: { orderId },
-    breadcrumb: [
-      { label: 'Dashboard', href: '/' },
-      { label: 'Orders', href: '/order-management' },
-      { label: `Order ${orderId}`, href: `/order-details?id=${orderId}`, active: true }
-    ]
-  });
-});
-
-// Menu Management page
-app.get('/menu-management', (req, res) => {
-  res.json({
-    page: 'menu-management',
-    title: 'Menu Management',
-    component: 'MenuManagement',
-    breadcrumb: [
-      { label: 'Dashboard', href: '/' },
-      { label: 'Menu', href: '/menu-management', active: true }
-    ]
-  });
-});
-
-// User Management page
-app.get('/user-management', (req, res) => {
-  res.json({
-    page: 'user-management',
-    title: 'User Management',
-    component: 'UserManagement',
-    breadcrumb: [
-      { label: 'Dashboard', href: '/' },
-      { label: 'Users', href: '/user-management', active: true }
-    ]
-  });
-});
-
-// Bill Generation page
-app.get('/bill-generation', (req, res) => {
-  const orderId = req.query.orderId;
-  res.json({
-    page: 'bill-generation',
-    title: 'Bill Generation',
-    component: 'BillGeneration',
-    params: { orderId },
-    breadcrumb: [
-      { label: 'Dashboard', href: '/' },
-      { label: 'Orders', href: '/order-management' },
-      { label: 'Generate Bill', href: '/bill-generation', active: true }
-    ]
-  });
+// Get navigation structure
+app.get('/api/navigation', (req, res) => {
+  res.json([
+    {
+      path: '/',
+      label: 'Dashboard',
+      component: 'DashboardOverview',
+      icon: 'BarChart3'
+    },
+    {
+      path: '/order-management',
+      label: 'Orders',
+      component: 'OrderManagement',
+      icon: 'ShoppingBag'
+    },
+    {
+      path: '/menu-management',
+      label: 'Menu',
+      component: 'MenuManagement',
+      icon: 'UtensilsCrossed'
+    },
+    {
+      path: '/user-management',
+      label: 'Users',
+      component: 'UserManagement',
+      icon: 'Users'
+    },
+    {
+      path: '/bill-generation',
+      label: 'Billing',
+      component: 'BillGeneration',
+      icon: 'Receipt'
+    }
+  ]);
 });
 
 // =============================================================================
@@ -623,28 +652,6 @@ app.delete('/api/users/:id', async (req, res) => {
 });
 
 // =============================================================================
-// CUSTOMERS API ROUTES
-// =============================================================================
-
-// Get all customers
-app.get('/api/customers', async (req, res) => {
-  try {
-    const [customers] = await pool.execute(`
-      SELECT c.*, COUNT(o.id) as total_orders, COALESCE(SUM(o.total_amount), 0) as total_spent
-      FROM customers c
-      LEFT JOIN orders o ON c.id = o.customer_id
-      GROUP BY c.id
-      ORDER BY c.created_at DESC
-    `);
-
-    res.json(customers);
-  } catch (error) {
-    console.error('Customers fetch error:', error);
-    res.status(500).json({ error: 'Failed to fetch customers' });
-  }
-});
-
-// =============================================================================
 // DATABASE INITIALIZATION
 // =============================================================================
 
@@ -747,62 +754,6 @@ app.post('/api/init-database', async (req, res) => {
     console.error('Database initialization error:', error);
     res.status(500).json({ error: 'Failed to initialize database' });
   }
-});
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'FoodFlow Backend API is running' });
-});
-
-// =============================================================================
-// NAVIGATION API
-// =============================================================================
-
-// Get navigation structure
-app.get('/api/navigation', (req, res) => {
-  res.json([
-    {
-      path: '/',
-      label: 'Dashboard',
-      component: 'DashboardOverview',
-      icon: 'BarChart3'
-    },
-    {
-      path: '/order-management',
-      label: 'Orders',
-      component: 'OrderManagement',
-      icon: 'ShoppingBag'
-    },
-    {
-      path: '/menu-management',
-      label: 'Menu',
-      component: 'MenuManagement',
-      icon: 'UtensilsCrossed'
-    },
-    {
-      path: '/user-management',
-      label: 'Users',
-      component: 'UserManagement',
-      icon: 'Users'
-    },
-    {
-      path: '/bill-generation',
-      label: 'Billing',
-      component: 'BillGeneration',
-      icon: 'Receipt'
-    }
-  ]);
-});
-
-// Catch all handler: serve React app for any non-API routes
-app.get('*', (req, res) => {
-  // For API routes that don't exist, return 404
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({ error: 'API endpoint not found' });
-  }
-  
-  // For page routes, serve the app
-  res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
 // Start server

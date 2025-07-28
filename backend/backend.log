@@ -26,3 +26,5 @@ TypeError: Missing parameter name at 1: https://git.new/pathToRegexpError
 
 Node.js v22.16.0
 [31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node index.js`[39m
