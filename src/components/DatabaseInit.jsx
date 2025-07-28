@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import Button from './ui/Button';
 import { initializeDatabase, healthCheck } from '../utils/api';
+import { API_CONFIG } from '../utils/config';
 
-const DatabaseInit = () => {
+const DatabaseInit = ({ error: initialError }) => {
   const [isInitializing, setIsInitializing] = useState(false);
   const [initComplete, setInitComplete] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(initialError);
   const [backendStatus, setBackendStatus] = useState('checking');
 
   // Check backend health on component mount
@@ -14,8 +15,11 @@ const DatabaseInit = () => {
       try {
         await healthCheck();
         setBackendStatus('connected');
+        setError(null);
       } catch (error) {
+        console.error('Backend health check failed:', error);
         setBackendStatus('disconnected');
+        setError('Unable to connect to backend server');
       }
     };
     
@@ -34,9 +38,22 @@ const DatabaseInit = () => {
       }, 2000);
     } catch (error) {
       console.error('Database initialization failed:', error);
-      setError('Failed to initialize database. Please ensure MySQL is running and configured correctly.');
+      setError('Failed to initialize database. Please ensure the backend server is running and properly configured.');
     } finally {
       setIsInitializing(false);
+    }
+  };
+
+  const handleRetryConnection = async () => {
+    setBackendStatus('checking');
+    setError(null);
+    
+    try {
+      await healthCheck();
+      setBackendStatus('connected');
+    } catch (error) {
+      setBackendStatus('disconnected');
+      setError('Backend server is still not responding. Please check the server status.');
     }
   };
 
@@ -46,6 +63,9 @@ const DatabaseInit = () => {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Checking backend connection...</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            Connecting to: {API_CONFIG.BACKEND_URL}
+          </p>
         </div>
       </div>
     );
@@ -61,20 +81,36 @@ const DatabaseInit = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-foreground mb-2">Backend Disconnected</h2>
-            <p className="text-muted-foreground text-sm">
-              Unable to connect to the backend server. Please ensure the backend is running on port 5000.
+            <h2 className="text-xl font-bold text-foreground mb-2">Backend Connection Failed</h2>
+            <p className="text-muted-foreground text-sm mb-2">
+              Unable to connect to the backend server.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Backend URL: {API_CONFIG.BACKEND_URL}
             </p>
           </div>
           
+          {error && (
+            <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <p className="text-destructive text-sm">{error}</p>
+            </div>
+          )}
+          
           <div className="space-y-4">
             <div className="p-3 bg-muted rounded-lg">
-              <p className="text-sm font-medium text-foreground mb-1">To start the backend:</p>
-              <code className="text-xs text-muted-foreground block">cd backend && npm run dev</code>
+              <p className="text-sm font-medium text-foreground mb-1">Troubleshooting:</p>
+              <ul className="text-xs text-muted-foreground space-y-1">
+                <li>• Ensure the backend server is running</li>
+                <li>• Check if port 5000 is accessible</li>
+                <li>• Verify network connectivity</li>
+                {import.meta.env.DEV && (
+                  <li>• In development: cd backend && npm run dev</li>
+                )}
+              </ul>
             </div>
             
             <Button 
-              onClick={() => window.location.reload()} 
+              onClick={handleRetryConnection} 
               className="w-full"
               iconName="RefreshCw"
               iconPosition="left"
