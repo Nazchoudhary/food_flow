@@ -33,8 +33,11 @@
   },
   "scripts": {
     "start": "vite",
+    "dev": "vite",
     "build": "vite build --sourcemap",
-    "serve": "vite preview"
+    "serve": "vite preview",
+    "build:production": "NODE_ENV=production vite build",
+    "start:production": "cd backend && NODE_ENV=production npm start"
   },
   "eslintConfig": {
     "extends": [
