@@ -6,12 +6,12 @@ const getApiBaseUrl = () => {
     return import.meta.env.VITE_API_URL;
   }
   
-  // In production/deployed environment, use the same origin as the frontend
-  if (import.meta.env.PROD) {
+  // In any deployed environment (not localhost), use the same origin
+  if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
     return `${window.location.origin}/api`;
   }
   
-  // In development, use localhost:5000
+  // In development with localhost, use the separate backend port
   return 'http://localhost:5000/api';
 };
 
@@ -21,21 +21,35 @@ const getBackendUrl = () => {
     return import.meta.env.VITE_BACKEND_URL;
   }
   
-  // In production/deployed environment, use the same origin as the frontend
-  if (import.meta.env.PROD) {
+  // In any deployed environment (not localhost), use the same origin
+  if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
     return window.location.origin;
   }
   
-  // In development, use localhost:5000
+  // In development with localhost, use the separate backend port
   return 'http://localhost:5000';
 };
 
 export const API_CONFIG = {
   BASE_URL: getApiBaseUrl(),
   BACKEND_URL: getBackendUrl(),
-  TIMEOUT: 10000,
+  TIMEOUT: 15000, // Increased timeout for deployed environments
   RETRY_ATTEMPTS: 3,
-  RETRY_DELAY: 1000
+  RETRY_DELAY: 1000,
+  // Debug info
+  IS_DEPLOYED: window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1',
+  HOSTNAME: window.location.hostname,
+  ORIGIN: window.location.origin
 };
+
+// Log configuration in development
+if (import.meta.env.DEV) {
+  console.log('API Configuration:', {
+    BASE_URL: API_CONFIG.BASE_URL,
+    BACKEND_URL: API_CONFIG.BACKEND_URL,
+    IS_DEPLOYED: API_CONFIG.IS_DEPLOYED,
+    HOSTNAME: API_CONFIG.HOSTNAME
+  });
+}
 
 export default API_CONFIG;
