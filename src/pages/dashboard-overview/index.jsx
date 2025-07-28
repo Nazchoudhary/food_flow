@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Header from '../../components/ui/Header';
 import Sidebar from '../../components/ui/Sidebar';
 import Breadcrumb from '../../components/ui/Breadcrumb';
@@ -9,9 +8,9 @@ import QuickActionsWidget from './components/QuickActionsWidget';
 import NotificationToast from './components/NotificationToast';
 import PaymentSummaryWidget from './components/PaymentSummaryWidget';
 import { dashboardAPI } from '../../utils/api';
+import { navigate } from '../../utils/navigation';
 
-const DashboardOverview = () => {
-  const navigate = useNavigate();
+const DashboardOverview = ({ pageData }) => {
   const [notifications, setNotifications] = useState([]);
   const [dashboardMetrics, setDashboardMetrics] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
@@ -156,7 +155,7 @@ const DashboardOverview = () => {
   }, []);
 
   const handleViewOrderDetails = (orderId) => {
-    navigate('/order-details', { state: { orderId } });
+    navigate(`/order-details?id=${orderId}`);
   };
 
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
@@ -192,7 +191,7 @@ const DashboardOverview = () => {
   };
 
   const handleViewOrderFromNotification = (orderId) => {
-    navigate('/order-details', { state: { orderId } });
+    navigate(`/order-details?id=${orderId}`);
   };
 
   if (loading) {
@@ -219,7 +218,7 @@ const DashboardOverview = () => {
       
       <main className="ml-0 md:ml-60 pt-16 transition-all duration-300">
         <div className="p-6">
-          <Breadcrumb />
+          <Breadcrumb breadcrumb={pageData?.breadcrumb} />
           
           {/* Error Message */}
           {error && (
