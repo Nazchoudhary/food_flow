@@ -27,17 +27,23 @@ function App() {
     'OrderDetails': OrderDetails,
     'MenuManagement': MenuManagement,
     'UserManagement': UserManagement,
-    'BillGeneration': BillGeneration
+    'BillGeneration': BillGeneration,
+    'NotFound': NotFound
   };
 
   // Load page data from backend route
   const loadPageData = async (path) => {
     try {
-      const response = await fetch(`http://localhost:5000${path}${window.location.search}`, {
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
+      const params = new URLSearchParams();
+      params.append('path', path);
+      
+      // Add query parameters if they exist
+      const searchParams = new URLSearchParams(window.location.search);
+      for (const [key, value] of searchParams) {
+        params.append(key, value);
+      }
+
+      const response = await fetch(`http://localhost:5000/api/page-data?${params.toString()}`);
       
       if (response.ok) {
         const data = await response.json();

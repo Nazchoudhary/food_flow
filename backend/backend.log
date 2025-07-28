@@ -28,3 +28,6 @@ Node.js v22.16.0
 [31m[nodemon] app crashed - waiting for file changes before starting...[39m
 [32m[nodemon] restarting due to changes...[39m
 [32m[nodemon] starting `node index.js`[39m
+[dotenv@17.2.1] injecting env (6) from .env -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+🚀 FoodFlow Backend API running on port 5000
+✅ Connected to MySQL database
