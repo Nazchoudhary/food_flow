@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import Button from './ui/Button';
-import { initializeDatabase, healthCheck } from '../utils/api';
+import { initializeDatabase, healthCheck, isDemoMode } from '../utils/api';
 import { API_CONFIG } from '../utils/config';
 
 const DatabaseInit = ({ error: initialError, backendHealth }) => {
@@ -20,7 +20,11 @@ const DatabaseInit = ({ error: initialError, backendHealth }) => {
     const checkBackend = async () => {
       try {
         const health = await healthCheck();
-        setBackendStatus('connected');
+        if (health.status === 'DEMO') {
+          setBackendStatus('demo');
+        } else {
+          setBackendStatus('connected');
+        }
         setError(null);
         console.log('Backend health check successful:', health);
       } catch (error) {
@@ -57,12 +61,20 @@ const DatabaseInit = ({ error: initialError, backendHealth }) => {
     
     try {
       const health = await healthCheck();
-      setBackendStatus('connected');
+      if (health.status === 'DEMO') {
+        setBackendStatus('demo');
+      } else {
+        setBackendStatus('connected');
+      }
       console.log('Backend retry successful:', health);
     } catch (error) {
       setBackendStatus('disconnected');
       setError(`Backend server is still not responding: ${error.message}`);
     }
+  };
+
+  const handleContinueDemo = () => {
+    window.location.reload();
   };
 
   if (backendStatus === 'checking') {
@@ -81,6 +93,54 @@ const DatabaseInit = ({ error: initialError, backendHealth }) => {
             <p className="text-xs text-muted-foreground">
               <strong>Host:</strong> {API_CONFIG.HOSTNAME}
             </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (backendStatus === 'demo') {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="max-w-lg w-full p-6 bg-card border border-border rounded-lg">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-foreground mb-2">Demo Mode Active</h2>
+            <p className="text-muted-foreground text-sm mb-2">
+              The application is running in demo mode with mock data.
+            </p>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm font-medium text-amber-800 mb-2">Demo Features:</p>
+              <ul className="text-xs text-amber-700 space-y-1">
+                <li>• Browse sample menu items and categories</li>
+                <li>• View mock orders and customer data</li>
+                <li>• Explore the admin dashboard interface</li>
+                <li>• Test navigation and UI components</li>
+              </ul>
+            </div>
+
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="text-sm font-medium text-foreground mb-1">Note:</p>
+              <p className="text-xs text-muted-foreground">
+                Changes made in demo mode are not persisted and will reset on page reload.
+              </p>
+            </div>
+            
+            <Button 
+              onClick={handleContinueDemo} 
+              className="w-full"
+              iconName="Play"
+              iconPosition="left"
+            >
+              Continue to Demo
+            </Button>
           </div>
         </div>
       </div>
@@ -131,14 +191,26 @@ const DatabaseInit = ({ error: initialError, backendHealth }) => {
               </div>
             )}
             
-            <Button 
-              onClick={handleRetryConnection} 
-              className="w-full"
-              iconName="RefreshCw"
-              iconPosition="left"
-            >
-              Retry Connection
-            </Button>
+            <div className="flex space-x-2">
+              <Button 
+                onClick={handleRetryConnection} 
+                className="flex-1"
+                variant="outline"
+                iconName="RefreshCw"
+                iconPosition="left"
+              >
+                Retry
+              </Button>
+              
+              <Button 
+                onClick={handleContinueDemo} 
+                className="flex-1"
+                iconName="Play"
+                iconPosition="left"
+              >
+                Demo Mode
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -172,7 +244,7 @@ const DatabaseInit = ({ error: initialError, backendHealth }) => {
           </div>
           <h1 className="text-2xl font-bold text-foreground mb-2">Welcome to FoodFlow Admin</h1>
           <p className="text-muted-foreground">
-            Backend connected successfully! {API_CONFIG.IS_DEPLOYED ? 'Initialize the database to get started.' : 'Setup your database to continue.'}
+            Backend connected successfully! Initialize the database to get started with sample data.
           </p>
         </div>
 
@@ -195,20 +267,18 @@ const DatabaseInit = ({ error: initialError, backendHealth }) => {
             )}
           </div>
 
-          {!API_CONFIG.IS_DEPLOYED && (
-            <div className="p-4 bg-muted rounded-lg">
-              <h3 className="font-semibold text-foreground mb-2">Database Setup</h3>
-              <p className="text-sm text-muted-foreground mb-3">
-                This will create the necessary tables and insert sample data including:
-              </p>
-              <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-                <li>8 Menu categories and 12 menu items</li>
-                <li>8 Sample customers and orders</li>
-                <li>5 Admin users with different roles</li>
-                <li>Payment and order tracking data</li>
-              </ul>
-            </div>
-          )}
+          <div className="p-4 bg-muted rounded-lg">
+            <h3 className="font-semibold text-foreground mb-2">Database Setup</h3>
+            <p className="text-sm text-muted-foreground mb-3">
+              This will create the necessary tables and insert sample data including:
+            </p>
+            <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+              <li>8 Menu categories and 12 menu items</li>
+              <li>8 Sample customers and orders</li>
+              <li>5 Admin users with different roles</li>
+              <li>Payment and order tracking data</li>
+            </ul>
+          </div>
 
           <Button
             onClick={handleInitializeDatabase}
