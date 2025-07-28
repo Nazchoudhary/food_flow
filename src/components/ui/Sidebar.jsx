@@ -1,189 +1,157 @@
-import React, { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import Icon from '../AppIcon';
-import Button from './Button';
+import { navigate, getCurrentPath } from '../../utils/navigation';
 
 const Sidebar = () => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const location = useLocation();
-  const navigate = useNavigate();
+  const [isMobile, setIsMobile] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [navigationItems, setNavigationItems] = useState([]);
+  const [currentPath, setCurrentPath] = useState(getCurrentPath());
 
-  const navigationItems = [
-    {
-      label: 'Dashboard',
-      path: '/dashboard-overview',
-      icon: 'LayoutDashboard',
-      badge: null,
-      role: 'all'
-    },
-    {
-      label: 'Order Management',
-      path: '/order-management',
-      icon: 'ClipboardList',
-      badge: 5,
-      role: 'all'
-    },
-    {
-      label: 'Order Details',
-      path: '/order-details',
-      icon: 'FileText',
-      badge: null,
-      role: 'all'
-    },
-    {
-      label: 'Menu Management',
-      path: '/menu-management',
-      icon: 'Menu',
-      badge: null,
-      role: 'all'
-    },
-    {
-      label: 'User Management',
-      path: '/user-management',
-      icon: 'Users',
-      badge: null,
-      role: 'superadmin'
-    },
-    {
-      label: 'Bill Generation',
-      path: '/bill-generation',
-      icon: 'Receipt',
-      badge: null,
-      role: 'all'
-    }
-  ];
+  // Load navigation items from backend
+  useEffect(() => {
+    const loadNavigation = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/navigation');
+        const items = await response.json();
+        setNavigationItems(items);
+      } catch (error) {
+        console.error('Failed to load navigation:', error);
+        // Fallback navigation items
+        setNavigationItems([
+          { path: '/', label: 'Dashboard', icon: 'BarChart3' },
+          { path: '/order-management', label: 'Orders', icon: 'ShoppingBag' },
+          { path: '/menu-management', label: 'Menu', icon: 'UtensilsCrossed' },
+          { path: '/user-management', label: 'Users', icon: 'Users' },
+          { path: '/bill-generation', label: 'Billing', icon: 'Receipt' }
+        ]);
+      }
+    };
+
+    loadNavigation();
+  }, []);
+
+  // Update current path when location changes
+  useEffect(() => {
+    const updateCurrentPath = () => {
+      setCurrentPath(getCurrentPath());
+    };
+
+    // Listen for navigation changes
+    const originalPushState = window.history.pushState;
+    window.history.pushState = function() {
+      originalPushState.apply(window.history, arguments);
+      updateCurrentPath();
+    };
+
+    window.addEventListener('popstate', updateCurrentPath);
+    
+    return () => {
+      window.history.pushState = originalPushState;
+      window.removeEventListener('popstate', updateCurrentPath);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) {
+        setIsOpen(false);
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleNavigation = (path) => {
     navigate(path);
-    setIsMobileOpen(false);
+    if (isMobile) {
+      setIsOpen(false);
+    }
   };
 
-  const toggleSidebar = () => {
-    setIsCollapsed(!isCollapsed);
+  const isActiveRoute = (path) => {
+    if (path === '/') {
+      return currentPath === '/' || currentPath === '/dashboard-overview';
+    }
+    return currentPath === path;
   };
-
-  const toggleMobileSidebar = () => {
-    setIsMobileOpen(!isMobileOpen);
-  };
-
-  const isActive = (path) => {
-    return location.pathname === path;
-  };
-
-  // Filter navigation items based on user role (for demo, showing all items)
-  const filteredNavItems = navigationItems.filter(item => 
-    item.role === 'all' || item.role === 'superadmin'
-  );
 
   return (
     <>
-      {/* Mobile Menu Button */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={toggleMobileSidebar}
-        className="fixed top-4 left-4 z-[1300] md:hidden"
-      >
-        <Icon name="Menu" size={20} />
-      </Button>
-
-      {/* Mobile Backdrop */}
-      {isMobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-[1200] md:hidden"
-          onClick={() => setIsMobileOpen(false)}
+      {/* Mobile Overlay */}
+      {isMobile && isOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          onClick={() => setIsOpen(false)}
         />
       )}
 
       {/* Sidebar */}
-      <aside
-        className={`
-          fixed top-16 left-0 h-[calc(100vh-4rem)] bg-card border-r border-border z-[1000]
-          transition-all duration-300 ease-in-out
-          ${isCollapsed ? 'w-16' : 'w-60'}
-          ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
-          md:translate-x-0
-        `}
+      <aside 
+        className={`fixed top-16 left-0 z-50 w-60 h-[calc(100vh-4rem)] bg-card border-r border-border transition-transform duration-300 ease-in-out md:translate-x-0 ${
+          isMobile && !isOpen ? '-translate-x-full' : 'translate-x-0'
+        }`}
       >
         <div className="flex flex-col h-full">
-          {/* Sidebar Header */}
-          <div className="flex items-center justify-between p-4 border-b border-border">
-            {!isCollapsed && (
-              <h2 className="text-sm font-medium text-muted-foreground">Navigation</h2>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleSidebar}
-              className="hidden md:flex"
-            >
-              <Icon name={isCollapsed ? "ChevronRight" : "ChevronLeft"} size={16} />
-            </Button>
+          {/* Navigation Header */}
+          <div className="p-6 border-b border-border">
+            <h2 className="text-lg font-semibold text-foreground">Navigation</h2>
           </div>
 
-          {/* Navigation Items */}
-          <nav className="flex-1 p-4 space-y-2">
-            {filteredNavItems.map((item) => (
+          {/* Navigation Links */}
+          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+            {navigationItems.map((item) => (
               <button
                 key={item.path}
                 onClick={() => handleNavigation(item.path)}
-                className={`
-                  w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium
-                  transition-all duration-200 ease-out group
-                  ${isActive(item.path)
-                    ? 'bg-primary text-primary-foreground shadow-sm'
+                className={`w-full flex items-center space-x-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-200 ${
+                  isActiveRoute(item.path)
+                    ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }
-                  ${isCollapsed ? 'justify-center' : 'justify-start'}
-                `}
+                }`}
               >
-                <div className="relative flex items-center">
-                  <Icon
-                    name={item.icon}
-                    size={20}
-                    className={`
-                      ${isActive(item.path) ? 'text-primary-foreground' : ''}
-                    `}
-                  />
-                  {item.badge && (
-                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-accent rounded-full flex items-center justify-center">
-                      <span className="text-xs text-accent-foreground font-medium">
-                        {item.badge}
-                      </span>
-                    </span>
-                  )}
-                </div>
-                
-                {!isCollapsed && (
-                  <span className="flex-1 text-left">{item.label}</span>
-                )}
-                
-                {isCollapsed && (
-                  <div className="absolute left-full ml-2 px-2 py-1 bg-popover border border-border rounded-md shadow-modal opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-[1100]">
-                    <span className="text-xs text-popover-foreground">{item.label}</span>
-                  </div>
-                )}
+                <Icon 
+                  name={item.icon} 
+                  size={18} 
+                  className={isActiveRoute(item.path) ? 'text-primary-foreground' : ''} 
+                />
+                <span>{item.label}</span>
               </button>
             ))}
           </nav>
 
           {/* Sidebar Footer */}
           <div className="p-4 border-t border-border">
-            <div className={`flex items-center space-x-3 ${isCollapsed ? 'justify-center' : ''}`}>
-              <div className="w-8 h-8 bg-success rounded-full flex items-center justify-center">
-                <div className="w-2 h-2 bg-white rounded-full"></div>
+            <div className="flex items-center space-x-3 p-3 rounded-lg bg-muted">
+              <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+                <Icon name="User" size={16} className="text-primary-foreground" />
               </div>
-              {!isCollapsed && (
-                <div className="flex flex-col">
-                  <span className="text-xs font-medium text-foreground">System Status</span>
-                  <span className="text-xs text-success">All Systems Online</span>
-                </div>
-              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">
+                  Admin User
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  Super Administrator
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </aside>
+
+      {/* Mobile Menu Button */}
+      {isMobile && (
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="fixed top-20 left-4 z-60 p-2 bg-card border border-border rounded-lg shadow-lg md:hidden"
+        >
+          <Icon name={isOpen ? "X" : "Menu"} size={20} className="text-foreground" />
+        </button>
+      )}
     </>
   );
 };
