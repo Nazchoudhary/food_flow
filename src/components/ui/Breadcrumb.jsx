@@ -1,76 +1,38 @@
 import React from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
 import Icon from '../AppIcon';
+import { navigate } from '../../utils/navigation';
 
-const Breadcrumb = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
+const Breadcrumb = ({ breadcrumb = [] }) => {
+  if (!breadcrumb || breadcrumb.length === 0) {
+    return null;
+  }
 
-  const pathMap = {
-    '/dashboard-overview': 'Dashboard Overview',
-    '/order-management': 'Order Management',
-    '/order-details': 'Order Details',
-    '/menu-management': 'Menu Management',
-    '/user-management': 'User Management',
-    '/bill-generation': 'Bill Generation'
-  };
-
-  const generateBreadcrumbs = () => {
-    const pathSegments = location.pathname.split('/').filter(segment => segment);
-    const breadcrumbs = [];
-
-    // Always start with Dashboard as home
-    breadcrumbs.push({
-      label: 'Dashboard',
-      path: '/dashboard-overview',
-      isActive: false
-    });
-
-    // Add current page if it's not dashboard
-    if (location.pathname !== '/dashboard-overview') {
-      const currentPageLabel = pathMap[location.pathname] || 'Unknown Page';
-      breadcrumbs.push({
-        label: currentPageLabel,
-        path: location.pathname,
-        isActive: true
-      });
-    } else {
-      // If we're on dashboard, mark it as active
-      breadcrumbs[0].isActive = true;
-    }
-
-    return breadcrumbs;
-  };
-
-  const breadcrumbs = generateBreadcrumbs();
-
-  const handleNavigation = (path) => {
-    if (path !== location.pathname) {
-      navigate(path);
+  const handleNavigate = (href) => {
+    if (href) {
+      navigate(href);
     }
   };
 
   return (
-    <nav className="flex items-center space-x-2 text-sm text-muted-foreground mb-6">
-      {breadcrumbs.map((crumb, index) => (
-        <React.Fragment key={crumb.path}>
-          {index > 0 && (
-            <Icon name="ChevronRight" size={16} className="text-muted-foreground/50" />
-          )}
+    <nav className="flex items-center space-x-2 text-sm mb-6" aria-label="Breadcrumb">
+      <Icon name="Home" size={16} className="text-muted-foreground" />
+      
+      {breadcrumb.map((item, index) => (
+        <React.Fragment key={index}>
+          <Icon name="ChevronRight" size={14} className="text-muted-foreground" />
           
-          <button
-            onClick={() => handleNavigation(crumb.path)}
-            className={`
-              transition-colors duration-200 hover:text-foreground
-              ${crumb.isActive 
-                ? 'text-foreground font-medium cursor-default' 
-                : 'text-muted-foreground hover:text-foreground cursor-pointer'
-              }
-            `}
-            disabled={crumb.isActive}
-          >
-            {crumb.label}
-          </button>
+          {item.active ? (
+            <span className="text-foreground font-medium">
+              {item.label}
+            </span>
+          ) : (
+            <button
+              onClick={() => handleNavigate(item.href)}
+              className="text-muted-foreground hover:text-foreground transition-colors duration-200"
+            >
+              {item.label}
+            </button>
+          )}
         </React.Fragment>
       ))}
     </nav>
